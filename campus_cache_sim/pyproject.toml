@@ -1,0 +1,14 @@
+[project]
+name = "campus-cache-sim"
+version = "0.1.0"
+description = "Campus Cloud File Cache Simulator (LFU + LRU tie-breaking)"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+cache-sim = "src.cache_sim.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
