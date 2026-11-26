@@ -1,0 +1,14 @@
+# Unseen demo: frequency ties + updates. Adjust, then record expected output.
+CAPACITY 3
+PUT X 1
+PUT Y 2
+PUT Z 3
+GET X
+GET Y
+PUT Z 30
+PUT W 4
+GET Q
+STATE
+GET W
+PUT V 5
+STATE
