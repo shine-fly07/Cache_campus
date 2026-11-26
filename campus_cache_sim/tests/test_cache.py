@@ -2,7 +2,7 @@
 
 
 import unittest
-from cache_sim.cache import LFUCache
+from src.cache_sim.cache import LFUCache
 
 
 class TestLFUCache(unittest.TestCase):
