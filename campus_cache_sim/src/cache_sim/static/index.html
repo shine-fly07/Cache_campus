@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CampusCache — LFU + LRU Cache Simulator</title>
+  <style>
+    :root {
+      --bg: #0b1120;
+      --panel: #111827;
+      --panel-alt: #1a2335;
+      --border: #263248;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-soft: rgba(56, 189, 248, 0.14);
+      --green: #34d399;
+      --green-soft: rgba(52, 211, 153, 0.14);
+      --amber: #fbbf24;
+      --amber-soft: rgba(251, 191, 36, 0.16);
+      --red: #f87171;
+      --red-soft: rgba(248, 113, 113, 0.16);
+      --purple: #a78bfa;
+      --mono: "Cascadia Code", "Fira Code", Consolas, monospace;
+      --sans: "Segoe UI", system-ui, -apple-system, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: var(--sans);
+      background: radial-gradient(circle at top right, #162238 0%, var(--bg) 55%);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(17, 24, 39, 0.85);
+      backdrop-filter: blur(8px);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 1.2rem;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+    }
+
+    .brand p {
+      margin: 2px 0 0;
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+
+    .top-stats {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .pill {
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: var(--panel-alt);
+      border: 1px solid var(--border);
+      font-size: 0.82rem;
+      font-weight: 600;
+    }
+
+    .pill strong { color: var(--accent); font-family: var(--mono); }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 330px minmax(0, 1fr) 360px;
+      gap: 16px;
+      padding: 18px 24px 28px;
+      max-width: 1520px;
+      margin: 0 auto;
+    }
+
+    @media (max-width: 1180px) {
+      .layout { grid-template-columns: 1fr; }
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .panel h2 {
+      margin: 0;
+      font-size: 0.92rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .form-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    label {
+      font-size: 0.78rem;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    input, textarea {
+      width: 100%;
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-family: var(--mono);
+      font-size: 0.86rem;
+      outline: none;
+    }
+
+    input:focus, textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px var(--accent-soft);
+    }
+
+    textarea {
+      min-height: 210px;
+      resize: vertical;
+      line-height: 1.45;
+    }
+
+    button {
+      border: 1px solid var(--border);
+      background: var(--panel-alt);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 0.84rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.06s ease, border-color 0.15s ease, background 0.15s ease;
+      white-space: nowrap;
+    }
+
+    button:hover { border-color: var(--accent); background: #223049; }
+    button:active { transform: translateY(1px); }
+    button.primary {
+      background: #0284c7;
+      border-color: #38bdf8;
+      color: #fff;
+    }
+    button.primary:hover { background: #0369a1; }
+    button.good {
+      background: #059669;
+      border-color: #34d399;
+      color: #fff;
+    }
+    button.good:hover { background: #047857; }
+    button.danger {
+      background: rgba(248, 113, 113, 0.14);
+      border-color: rgba(248, 113, 113, 0.45);
+      color: #fecaca;
+    }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .event-banner {
+      padding: 11px 14px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--panel-alt);
+      font-family: var(--mono);
+      font-size: 0.84rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .event-banner.hit { border-color: var(--green); background: var(--green-soft); }
+    .event-banner.miss { border-color: var(--amber); background: var(--amber-soft); }
+    .event-banner.evict { border-color: var(--red); background: var(--red-soft); }
+    .event-banner.error { border-color: var(--red); background: var(--red-soft); color: #fecaca; }
+
+    .freq-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .freq-bucket {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      background: var(--panel-alt);
+    }
+
+    .freq-bucket.min-freq {
+      border-color: var(--amber);
+      box-shadow: inset 0 0 0 1px rgba(251, 191, 36, 0.25);
+    }
+
+    .bucket-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      font-size: 0.84rem;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      font-family: var(--mono);
+    }
+
+    .badge.min { background: var(--amber-soft); color: var(--amber); border: 1px solid rgba(251, 191, 36, 0.45); }
+    .badge.victim { background: var(--red-soft); color: var(--red); border: 1px solid rgba(248, 113, 113, 0.45); }
+    .badge.mru { background: var(--accent-soft); color: var(--accent); border: 1px solid rgba(56, 189, 248, 0.4); }
+
+    .nodes-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .node-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      padding: 9px 12px;
+      min-width: 96px;
+      cursor: pointer;
+      transition: border-color 0.15s ease, transform 0.1s ease;
+    }
+
+    .node-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+    .node-card.next-victim { border-color: var(--red); }
+    .node-card.just-touched { border-color: var(--green); box-shadow: 0 0 0 2px var(--green-soft); }
+
+    .node-key {
+      font-family: var(--mono);
+      font-size: 0.96rem;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .node-val {
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .arrow { color: var(--muted); font-family: var(--mono); font-size: 0.85rem; }
+
+    .empty-state {
+      padding: 28px;
+      text-align: center;
+      color: var(--muted);
+      border: 1px dashed var(--border);
+      border-radius: 10px;
+      font-size: 0.88rem;
+    }
+
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+
+    .kpi {
+      background: var(--panel-alt);
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      padding: 10px 12px;
+    }
+
+    .kpi-label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    .kpi-val { font-family: var(--mono); font-size: 1.15rem; font-weight: 700; margin-top: 3px; }
+
+    .bar-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      margin-top: 6px;
+    }
+
+    .bar-track {
+      flex: 1;
+      height: 8px;
+      background: var(--bg);
+      border-radius: 999px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+
+    .bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--purple));
+    }
+
+    .log-box {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      padding: 10px;
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      line-height: 1.5;
+      max-height: 290px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+
+    .log-line { padding: 2px 0; border-bottom: 1px solid rgba(38, 50, 72, 0.45); }
+    .log-line:last-child { border-bottom: none; }
+    .log-hit { color: var(--green); }
+    .log-miss { color: var(--amber); }
+    .log-evict { color: var(--red); }
+
+    .state-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .chip {
+      padding: 4px 9px;
+      border-radius: 6px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      font-family: var(--mono);
+      font-size: 0.78rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <h1>CampusCache — LFU + LRU Tie-Break Simulator</h1>
+      <p>Backed by hand-written HashMap, sentinel DoublyLinkedList, LFUCache &amp; Analytics</p>
+    </div>
+    <div class="top-stats">
+      <span class="pill">Capacity: <strong id="hdr-cap">3</strong></span>
+      <span class="pill">Size: <strong id="hdr-size">0</strong></span>
+      <span class="pill">min_freq: <strong id="hdr-minfreq">0</strong></span>
+      <span class="pill">Hit Ratio: <strong id="hdr-ratio">0.0%</strong></span>
+      <button onclick="loadDemo()">Load Demo</button>
+      <button class="danger" onclick="resetCache()">Reset</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <!-- Left Column: Operations & Script Player -->
+    <section class="panel">
+      <h2>Operations</h2>
+
+      <div class="form-group">
+        <label for="cap-input">Set Capacity (0 – 200)</label>
+        <div class="form-row">
+          <input id="cap-input" type="number" min="0" max="200" value="3" />
+          <button onclick="applyCapacity()">Set</button>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>PUT (key, value)</label>
+        <div class="form-row">
+          <input id="put-key" placeholder="Key (e.g. A)" />
+          <input id="put-val" placeholder="Val (e.g. 10)" />
+          <button class="primary" onclick="doPut()">PUT</button>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="get-key">GET (key) — or click any cached card</label>
+        <div class="form-row">
+          <input id="get-key" placeholder="Key (e.g. A)" />
+          <button class="good" onclick="doGet()">GET</button>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <button style="flex:1" onclick="execLine('STATE')">STATE</button>
+        <button style="flex:1" onclick="execLine('ANALYTICS')">ANALYTICS</button>
+      </div>
+
+      <hr style="border:none;border-top:1px solid var(--border);margin:2px 0;" />
+
+      <h2>
+        Script Player
+        <span id="script-pos" style="font-family:var(--mono);font-size:0.75rem;color:var(--accent);">Line 0 / 0</span>
+      </h2>
+      <textarea id="script-box" spellcheck="false"></textarea>
+      <div class="form-row" style="flex-wrap:wrap;">
+        <button class="primary" style="flex:1" onclick="stepScript()">Step Next</button>
+        <button id="autoplay-btn" style="flex:1" onclick="toggleAutoPlay()">Auto-Play</button>
+        <button class="good" style="flex:1" onclick="runAllScript()">Run All</button>
+        <button onclick="resetScriptCursor()">Rewind</button>
+      </div>
+    </section>
+
+    <!-- Center Column: Live Frequency Buckets & State -->
+    <section class="panel">
+      <h2>
+        Frequency Buckets (LRU → MRU)
+        <span style="font-size:0.74rem;text-transform:none;letter-spacing:0;">Leftmost in min_freq = Next Eviction Victim</span>
+      </h2>
+
+      <div id="event-banner" class="event-banner">
+        <span id="event-text">Ready. Add keys or step through demo/sequence.txt.</span>
+      </div>
+
+      <div id="freq-container" class="freq-list"></div>
+
+      <div>
+        <h2 style="margin-bottom:8px;">STATE (freq asc, LRU → MRU)</h2>
+        <div id="state-chips" class="state-chips"></div>
+      </div>
+    </section>
+
+    <!-- Right Column: Analytics, HashMap Stats, Logs -->
+    <section class="panel">
+      <h2>Analytics &amp; Internals</h2>
+
+      <div class="kpi-grid">
+        <div class="kpi">
+          <div class="kpi-label">Hits / Misses</div>
+          <div class="kpi-val" id="kpi-hm">0 / 0</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Hit Ratio</div>
+          <div class="kpi-val" id="kpi-ratio" style="color:var(--green);">0.0%</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Evictions</div>
+          <div class="kpi-val" id="kpi-evict" style="color:var(--red);">0</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Longest-Lived Victim</div>
+          <div class="kpi-val" id="kpi-longest" style="font-size:0.95rem;">—</div>
+        </div>
+      </div>
+
+      <div>
+        <label>Evictions by Frequency</label>
+        <div id="evict-bars" style="margin-top:4px;font-size:0.8rem;color:var(--muted);">None yet</div>
+      </div>
+
+      <div>
+        <label>Hand-Written HashMap Stats</label>
+        <div id="hm-stats" style="margin-top:6px;font-family:var(--mono);font-size:0.78rem;color:var(--muted);line-height:1.5;"></div>
+      </div>
+
+      <h2 style="margin-top:4px;">Operation Log</h2>
+      <div id="log-box" class="log-box"></div>
+    </section>
+  </main>
+
+  <script>
+    let scriptLines = [];
+    let scriptIdx = 0;
+    let autoPlayTimer = null;
+
+    function parseActiveLines() {
+      const raw = document.getElementById("script-box").value.split(/\r?\n/);
+      return raw.filter(l => {
+        const clean = l.split("#", 1)[0].trim();
+        return clean.length > 0;
+      });
+    }
+
+    function updateScriptPosition() {
+      scriptLines = parseActiveLines();
+      if (scriptIdx > scriptLines.length) scriptIdx = scriptLines.length;
+      document.getElementById("script-pos").textContent = `Op ${scriptIdx} / ${scriptLines.length}`;
+    }
+
+    document.getElementById("script-box").addEventListener("input", () => {
+      stopAutoPlay();
+      scriptIdx = 0;
+      updateScriptPosition();
+    });
+
+    async function api(url, method = "GET", payload = null) {
+      const opts = { method, headers: {} };
+      if (payload !== null) {
+        opts.headers["Content-Type"] = "application/json";
+        opts.body = JSON.stringify(payload);
+      }
+      const res = await fetch(url, opts);
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Request failed");
+      }
+      return data;
+    }
+
+    function showError(msg) {
+      const banner = document.getElementById("event-banner");
+      banner.className = "event-banner error";
+      document.getElementById("event-text").textContent = "Error: " + msg;
+    }
+
+    function render(snap) {
+      document.getElementById("hdr-cap").textContent = snap.capacity;
+      document.getElementById("hdr-size").textContent = snap.size;
+      document.getElementById("hdr-minfreq").textContent = snap.min_freq;
+      document.getElementById("hdr-ratio").textContent = snap.analytics.hit_ratio.toFixed(1) + "%";
+      document.getElementById("cap-input").value = snap.capacity;
+
+      // Event banner
+      const banner = document.getElementById("event-banner");
+      const ev = snap.last_event || {};
+      let cls = "event-banner";
+      if (ev.evicted) cls += " evict";
+      else if (ev.type === "GET" && ev.hit) cls += " hit";
+      else if (ev.type === "GET" && ev.hit === false) cls += " miss";
+      else if (ev.type === "PUT") cls += " hit";
+      banner.className = cls;
+      document.getElementById("event-text").textContent = ev.detail || "Ready.";
+
+      // Frequency buckets
+      const container = document.getElementById("freq-container");
+      container.innerHTML = "";
+      if (!snap.freq_buckets.length) {
+        container.innerHTML = `<div class="empty-state">Cache is empty. Use <strong>PUT</strong> or step through the script to insert items.</div>`;
+      } else {
+        const isFull = snap.capacity > 0 && snap.size >= snap.capacity;
+        snap.freq_buckets.forEach(bucket => {
+          const box = document.createElement("div");
+          box.className = "freq-bucket" + (bucket.is_min_freq ? " min-freq" : "");
+          const header = document.createElement("div");
+          header.className = "bucket-header";
+          header.innerHTML = `
+            <span><strong>freq = ${bucket.freq}</strong> (${bucket.nodes.length} item${bucket.nodes.length === 1 ? "" : "s"})</span>
+            <span>
+              ${bucket.is_min_freq ? `<span class="badge min">min_freq</span>` : ""}
+              ${bucket.is_min_freq && isFull ? `<span class="badge victim">eviction pool</span>` : ""}
+            </span>
+          `;
+          box.appendChild(header);
+
+          const row = document.createElement("div");
+          row.className = "nodes-row";
+          bucket.nodes.forEach((node, idx) => {
+            if (idx > 0) {
+              const arr = document.createElement("span");
+              arr.className = "arrow";
+              arr.textContent = "→";
+              row.appendChild(arr);
+            }
+            const card = document.createElement("div");
+            const isVictim = bucket.is_min_freq && isFull && idx === 0;
+            const isTouched = ev.key === node.key && (ev.type === "PUT" || (ev.type === "GET" && ev.hit));
+            card.className = "node-card" + (isVictim ? " next-victim" : "") + (isTouched ? " just-touched" : "");
+            card.title = `Click to GET ${node.key}`;
+            card.onclick = () => execLine(`GET ${node.key}`);
+
+            const tag = idx === 0
+              ? (isVictim ? `<span class="badge victim">VICTIM (LRU)</span>` : `<span class="badge" style="color:var(--muted);">LRU</span>`)
+              : (idx === bucket.nodes.length - 1 ? `<span class="badge mru">MRU</span>` : "");
+
+            card.innerHTML = `
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;">
+                <span class="node-key">${escapeHtml(node.key)}</span>
+                ${tag}
+              </div>
+              <div class="node-val">val=${escapeHtml(String(node.value))}</div>
+            `;
+            row.appendChild(card);
+          });
+          box.appendChild(row);
+          container.appendChild(box);
+        });
+      }
+
+      // STATE chips
+      const chips = document.getElementById("state-chips");
+      chips.innerHTML = "";
+      if (!snap.state.length) {
+        chips.innerHTML = `<span class="chip" style="color:var(--muted);">&lt;empty&gt;</span>`;
+      } else {
+        snap.state.forEach(item => {
+          const c = document.createElement("span");
+          c.className = "chip";
+          c.textContent = `${item.key}:${item.freq}`;
+          chips.appendChild(c);
+        });
+      }
+
+      // Analytics
+      const a = snap.analytics;
+      document.getElementById("kpi-hm").textContent = `${a.hits} / ${a.misses}`;
+      document.getElementById("kpi-ratio").textContent = `${a.hit_ratio.toFixed(1)}%`;
+      document.getElementById("kpi-evict").textContent = a.evictions;
+      document.getElementById("kpi-longest").textContent = a.longest_lived_key ?? "—";
+
+      const bars = document.getElementById("evict-bars");
+      if (!a.evictions_by_freq.length) {
+        bars.textContent = "None yet";
+      } else {
+        const maxCount = Math.max(...a.evictions_by_freq.map(x => x.count));
+        bars.innerHTML = a.evictions_by_freq.map(x => {
+          const pct = (x.count / maxCount) * 100;
+          return `
+            <div class="bar-row">
+              <span style="width:58px;">freq ${x.freq}</span>
+              <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
+              <span style="width:28px;text-align:right;">${x.count}</span>
+            </div>
+          `;
+        }).join("");
+      }
+
+      // HashMap stats
+      const km = snap.hashmap_stats.key_map;
+      const fm = snap.hashmap_stats.freq_map;
+      document.getElementById("hm-stats").innerHTML = `
+        key_map: ${km.size} entries / ${km.bucket_count} buckets (load ${km.load_factor}, max chain ${km.max_chain_length})<br/>
+        freq_map: ${fm.size} lists / ${fm.bucket_count} buckets (load ${fm.load_factor}, max chain ${fm.max_chain_length})
+      `;
+
+      // Logs
+      const logBox = document.getElementById("log-box");
+      logBox.innerHTML = snap.logs.map(line => {
+        let lcls = "log-line";
+        if (line.includes("EVICTED")) lcls += " log-evict";
+        else if (line.includes("-> HIT")) lcls += " log-hit";
+        else if (line.includes("-> MISS")) lcls += " log-miss";
+        return `<div class="${lcls}">${escapeHtml(line)}</div>`;
+      }).join("");
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    function escapeHtml(text) {
+      return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    async function execLine(line) {
+      try {
+        const res = await api("/api/exec", "POST", { line });
+        render(res.snapshot);
+      } catch (err) {
+        showError(err.message);
+      }
+    }
+
+    async function applyCapacity() {
+      const cap = parseInt(document.getElementById("cap-input").value, 10);
+      await execLine(`CAPACITY ${isNaN(cap) ? 0 : cap}`);
+    }
+
+    async function doPut() {
+      const k = document.getElementById("put-key").value.trim();
+      const v = document.getElementById("put-val").value.trim();
+      if (!k || !v) {
+        showError("PUT requires both key and value (whitespace-free tokens).");
+        return;
+      }
+      await execLine(`PUT ${k} ${v}`);
+    }
+
+    async function doGet() {
+      const k = document.getElementById("get-key").value.trim();
+      if (!k) {
+        showError("GET requires a key.");
+        return;
+      }
+      await execLine(`GET ${k}`);
+    }
+
+    async function resetCache() {
+      stopAutoPlay();
+      scriptIdx = 0;
+      updateScriptPosition();
+      const cap = parseInt(document.getElementById("cap-input").value, 10);
+      try {
+        const snap = await api("/api/reset", "POST", { capacity: isNaN(cap) ? 3 : cap });
+        render(snap);
+      } catch (err) {
+        showError(err.message);
+      }
+    }
+
+    async function loadDemo() {
+      stopAutoPlay();
+      try {
+        const data = await api("/api/demo");
+        document.getElementById("script-box").value = data.script;
+        scriptIdx = 0;
+        updateScriptPosition();
+        const snap = await api("/api/reset", "POST", { capacity: 3 });
+        render(snap);
+      } catch (err) {
+        showError(err.message);
+      }
+    }
+
+    async function stepScript() {
+      updateScriptPosition();
+      if (scriptIdx >= scriptLines.length) {
+        stopAutoPlay();
+        return;
+      }
+      const line = scriptLines[scriptIdx];
+      scriptIdx += 1;
+      updateScriptPosition();
+      await execLine(line);
+    }
+
+    async function runAllScript() {
+      stopAutoPlay();
+      const script = document.getElementById("script-box").value;
+      try {
+        const snap = await api("/api/run", "POST", { script, reset: true });
+        scriptLines = parseActiveLines();
+        scriptIdx = scriptLines.length;
+        updateScriptPosition();
+        render(snap);
+      } catch (err) {
+        showError(err.message);
+      }
+    }
+
+    function resetScriptCursor() {
+      stopAutoPlay();
+      scriptIdx = 0;
+      updateScriptPosition();
+    }
+
+    function stopAutoPlay() {
+      if (autoPlayTimer !== null) {
+        clearInterval(autoPlayTimer);
+        autoPlayTimer = null;
+      }
+      document.getElementById("autoplay-btn").textContent = "Auto-Play";
+    }
+
+    function toggleAutoPlay() {
+      if (autoPlayTimer !== null) {
+        stopAutoPlay();
+        return;
+      }
+      updateScriptPosition();
+      if (scriptIdx >= scriptLines.length) scriptIdx = 0;
+      document.getElementById("autoplay-btn").textContent = "Pause";
+      autoPlayTimer = setInterval(async () => {
+        if (scriptIdx >= scriptLines.length) {
+          stopAutoPlay();
+          return;
+        }
+        await stepScript();
+      }, 650);
+    }
+
+    // Boot
+    (async () => {
+      try {
+        const [demo, snap] = await Promise.all([api("/api/demo"), api("/api/state")]);
+        document.getElementById("script-box").value = demo.script;
+        updateScriptPosition();
+        render(snap);
+      } catch (err) {
+        showError(err.message);
+      }
+    })();
+  </script>
+</body>
+</html>

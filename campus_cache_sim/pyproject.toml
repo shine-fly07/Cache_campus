@@ -8,6 +8,7 @@ dependencies = []
 
 [project.scripts]
 cache-sim = "src.cache_sim.cli:main"
+cache-sim-ui = "src.cache_sim.ui:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
